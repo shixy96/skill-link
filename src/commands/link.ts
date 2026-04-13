@@ -80,6 +80,23 @@ async function resolveSkillSourcePath(skill: Skill): Promise<string | undefined>
   return path.join(repo.path, skill.path);
 }
 
+function formatSkillRefs(skills: Skill[]): string {
+  return skills.map((skill) => `${skill.repo}/${skill.path}`).join(', ');
+}
+
+async function resolveMatchedSkill(skill: Skill): Promise<OperationResult<ResolvedSkill>> {
+  const sourcePath = await resolveSkillSourcePath(skill);
+  if (!sourcePath) {
+    return fail({
+      code: 'REPO_NOT_FOUND',
+      message: `Repository not found for ${skill.repo}`,
+      action: 'Add repo: skilllink repo add <url>'
+    });
+  }
+
+  return ok({ skill, sourcePath });
+}
+
 async function findManagedRepoForPath(skillDir: string): Promise<{ repo: RepoMetadata; relativePath: string } | undefined> {
   const repos = await listManagedRepos();
 
@@ -97,23 +114,26 @@ async function resolveSkill(skillRef: string): Promise<OperationResult<ResolvedS
   const registry = await getRegistry();
   const expandedRef = expandPath(skillRef);
 
-  const exactMatch = registry.skills.find((skill) =>
-    skill.id === skillRef ||
+  const idMatch = registry.skills.find((skill) => skill.id === skillRef);
+  if (idMatch) {
+    return resolveMatchedSkill(idMatch);
+  }
+
+  const pathMatches = registry.skills.filter((skill) =>
     skill.path === skillRef ||
     (path.isAbsolute(expandedRef) && skill.path === expandedRef)
   );
 
-  if (exactMatch) {
-    const sourcePath = await resolveSkillSourcePath(exactMatch);
-    if (!sourcePath) {
-      return fail({
-        code: 'REPO_NOT_FOUND',
-        message: `Repository not found for ${exactMatch.repo}`,
-        action: 'Add repo: skilllink repo add <url>'
-      });
-    }
+  if (pathMatches.length === 1) {
+    return resolveMatchedSkill(pathMatches[0]);
+  }
 
-    return ok({ skill: exactMatch, sourcePath });
+  if (pathMatches.length > 1) {
+    return fail({
+      code: 'SKILL_AMBIGUOUS',
+      message: `Multiple skills match ${skillRef}: ${formatSkillRefs(pathMatches)}. Use <owner>/<repo>/<path> or a skill id.`,
+      action: 'Check skill list: skilllink skill list'
+    });
   }
 
   const repoPathMatch = skillRef.match(/^([^/]+\/[^/]+)\/(.+)$/);
@@ -121,38 +141,19 @@ async function resolveSkill(skillRef: string): Promise<OperationResult<ResolvedS
     const [, repo, skillPath] = repoPathMatch;
     const match = registry.skills.find((skill) => skill.repo === repo && skill.path === skillPath);
     if (match) {
-      const sourcePath = await resolveSkillSourcePath(match);
-      if (!sourcePath) {
-        return fail({
-          code: 'REPO_NOT_FOUND',
-          message: `Repository not found for ${match.repo}`,
-          action: 'Add repo: skilllink repo add <url>'
-        });
-      }
-
-      return ok({ skill: match, sourcePath });
+      return resolveMatchedSkill(match);
     }
   }
 
   const nameMatches = registry.skills.filter((skill) => skill.name === skillRef);
   if (nameMatches.length === 1) {
-    const skill = nameMatches[0];
-    const sourcePath = await resolveSkillSourcePath(skill);
-    if (!sourcePath) {
-      return fail({
-        code: 'REPO_NOT_FOUND',
-        message: `Repository not found for ${skill.repo}`,
-        action: 'Add repo: skilllink repo add <url>'
-      });
-    }
-
-    return ok({ skill, sourcePath });
+    return resolveMatchedSkill(nameMatches[0]);
   }
 
   if (nameMatches.length > 1) {
     return fail({
-      code: 'SKILL_NOT_FOUND',
-      message: `Multiple skills named ${skillRef}. Use <owner>/<repo>/<path> or a skill id.`,
+      code: 'SKILL_AMBIGUOUS',
+      message: `Multiple skills named ${skillRef}: ${formatSkillRefs(nameMatches)}. Use <owner>/<repo>/<path> or a skill id.`,
       action: 'Check skill list: skilllink skill list'
     });
   }

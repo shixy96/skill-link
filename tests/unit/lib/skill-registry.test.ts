@@ -98,4 +98,53 @@ describe('skill-registry', () => {
       expect(registry.skills.find((skill) => skill.name === 'other-repo-skill')?.id).toBe('other-id');
     });
   });
+
+  it('rejects ambiguous short repo names before removal', async () => {
+    await withTempHome(async (homeDir) => {
+      const registryDir = path.join(homeDir, '.skilllink');
+      await fs.mkdir(registryDir, { recursive: true });
+
+      const reposPath = path.join(registryDir, 'repos.json');
+      await fs.writeFile(
+        reposPath,
+        JSON.stringify(
+          [
+            {
+              name: 'skills',
+              owner: 'alice',
+              path: '/repos/alice/skills',
+              branches: ['main'],
+              currentBranch: 'main'
+            },
+            {
+              name: 'skills',
+              owner: 'bob',
+              path: '/repos/bob/skills',
+              branches: ['main'],
+              currentBranch: 'main'
+            }
+          ],
+          null,
+          2
+        ),
+        'utf-8'
+      );
+
+      const { getManagedReposRegistry, removeManagedRepo } = await import('../../../src/lib/skill-registry.js');
+
+      const ambiguous = await removeManagedRepo('skills');
+      expect(ambiguous.repo).toBeUndefined();
+      expect(ambiguous.ambiguousRepos?.map((repo) => `${repo.owner}/${repo.name}`)).toEqual([
+        'alice/skills',
+        'bob/skills'
+      ]);
+      expect(await getManagedReposRegistry()).toHaveLength(2);
+
+      const exact = await removeManagedRepo('alice/skills');
+      expect(exact.repo).toMatchObject({ owner: 'alice', name: 'skills' });
+      expect((await getManagedReposRegistry()).map((repo) => `${repo.owner}/${repo.name}`)).toEqual([
+        'bob/skills'
+      ]);
+    });
+  });
 });

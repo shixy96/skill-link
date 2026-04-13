@@ -7,6 +7,11 @@ import type { SkillRegistry, Skill, RepoMetadata, SymlinkEntry, ParsedSkill } fr
 const REGISTRY_PATH = path.join(CONFIG_DIR, 'skill-registry.json');
 const REPOS_PATH = path.join(CONFIG_DIR, 'repos.json');
 
+export interface RemoveManagedRepoResult {
+  repo?: RepoMetadata;
+  ambiguousRepos?: RepoMetadata[];
+}
+
 async function ensureRegistryDir(): Promise<void> {
   await fs.mkdir(CONFIG_DIR, { recursive: true });
 }
@@ -181,19 +186,31 @@ export async function upsertManagedRepo(repo: RepoMetadata): Promise<void> {
   await saveManagedReposRegistry(nextRepos);
 }
 
-export async function removeManagedRepo(name: string): Promise<RepoMetadata | undefined> {
+function managedRepoName(repo: RepoMetadata): string {
+  return `${repo.owner}/${repo.name}`;
+}
+
+export async function removeManagedRepo(name: string): Promise<RemoveManagedRepoResult> {
   const repos = await getManagedReposRegistry();
-  const repo = repos.find((entry) => entry.name === name || `${entry.owner}/${entry.name}` === name);
+  const exactMatch = repos.find((entry) => managedRepoName(entry) === name);
+  const shortNameMatches = name.includes('/')
+    ? []
+    : repos.filter((entry) => entry.name === name);
+  const repo = exactMatch ?? shortNameMatches[0];
 
   if (!repo) {
-    return undefined;
+    return {};
+  }
+
+  if (!exactMatch && shortNameMatches.length > 1) {
+    return { ambiguousRepos: shortNameMatches };
   }
 
   await saveManagedReposRegistry(
     repos.filter((entry) => entry.path !== repo.path)
   );
 
-  return repo;
+  return { repo };
 }
 
 export async function getReposDir(): Promise<string> {

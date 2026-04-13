@@ -14,8 +14,8 @@ import path from 'path';
 import type { OperationResult, RepoMetadata } from '../types.js';
 import { fail, ok } from '../types.js';
 
-function parseRepoRef(input: string): { owner: string; repoName: string; cloneRef: string; cloneUrl: string } | undefined {
-  const urlMatch = input.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/);
+export function parseRepoRef(input: string): { owner: string; repoName: string; cloneRef: string; cloneUrl: string } | undefined {
+  const urlMatch = input.match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
   if (urlMatch) {
     const [, owner, repoName] = urlMatch;
     return { owner, repoName, cloneRef: `${owner}/${repoName}`, cloneUrl: `https://github.com/${owner}/${repoName}.git` };
@@ -135,7 +135,19 @@ export async function repoList(): Promise<void> {
 }
 
 export async function repoRemoveData(name: string, deleteFiles = false): Promise<OperationResult<RepoMetadata>> {
-  const repo = await removeManagedRepo(name);
+  const removal = await removeManagedRepo(name);
+  if (removal.ambiguousRepos && removal.ambiguousRepos.length > 1) {
+    const matches = removal.ambiguousRepos
+      .map((repo) => `${repo.owner}/${repo.name}`)
+      .join(', ');
+    return fail({
+      code: 'REPO_AMBIGUOUS',
+      message: `Multiple repositories named ${name}: ${matches}. Use owner/name.`,
+      action: 'Run skilllink repo list'
+    });
+  }
+
+  const repo = removal.repo;
   if (!repo) {
     return fail({
       code: 'REPO_NOT_FOUND',
