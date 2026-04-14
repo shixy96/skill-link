@@ -12,6 +12,14 @@ function commandModuleUrl(name: string) {
   return new URL(`../dist/commands/${name}.js`, import.meta.url).href;
 }
 
+function libModuleUrl(name: string) {
+  return new URL(`../dist/lib/${name}.js`, import.meta.url).href;
+}
+
+function repoFullName(repo: { owner: string; name: string }) {
+  return `${repo.owner}/${repo.name}`;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -99,9 +107,17 @@ ipcMain.handle('skilllink:linkSync', async () => {
   return linkModule.linkSyncData();
 });
 
-ipcMain.handle('skilllink:fileList', async (_event, repoPath: string, dirPath?: string) => {
-  const rootPath = await fs.realpath(repoPath);
-  const requestedPath = await fs.realpath(dirPath || repoPath);
+ipcMain.handle('skilllink:fileList', async (_event, repoName: string, dirPath?: string) => {
+  const registryModule = (await import(libModuleUrl('skill-registry'))) as unknown as { listManagedRepos: () => Promise<Array<{ owner: string; name: string; path: string }>> };
+  const repos = await registryModule.listManagedRepos();
+  const repo = repos.find((entry) => repoFullName(entry) === repoName);
+
+  if (!repo) {
+    throw new Error(`Repository not found: ${repoName}`);
+  }
+
+  const rootPath = await fs.realpath(repo.path);
+  const requestedPath = await fs.realpath(dirPath || repo.path);
   const relative = path.relative(rootPath, requestedPath);
 
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
@@ -145,8 +161,8 @@ ipcMain.handle('skilllink:fileList', async (_event, repoPath: string, dirPath?: 
 });
 
 ipcMain.handle('skilllink:linkCreate', async (_event, skillName: string, targetDir?: string) => {
-  const { linkCreateData } = (await import(commandModuleUrl('link'))) as unknown as { linkCreateData: (skillName: string, targetDir?: string) => Promise<OperationResult> };
-  return linkCreateData(skillName, targetDir);
+  const { linkCreateData } = (await import(commandModuleUrl('link'))) as unknown as { linkCreateData: (skillName: string, targetDir?: string, options?: { restrictTargetToSkillsDirs?: boolean }) => Promise<OperationResult> };
+  return linkCreateData(skillName, targetDir, { restrictTargetToSkillsDirs: true });
 });
 
 ipcMain.handle('skilllink:linkRemove', async (_event, skillName: string, targetPath?: string) => {
@@ -155,8 +171,8 @@ ipcMain.handle('skilllink:linkRemove', async (_event, skillName: string, targetP
 });
 
 ipcMain.handle('skilllink:linkUpdate', async (_event, skillName: string, newTarget: string, oldTarget?: string) => {
-  const { linkUpdateData } = (await import(commandModuleUrl('link'))) as unknown as { linkUpdateData: (skillName: string, newTarget: string, oldTarget?: string) => Promise<OperationResult> };
-  return linkUpdateData(skillName, newTarget, oldTarget);
+  const { linkUpdateData } = (await import(commandModuleUrl('link'))) as unknown as { linkUpdateData: (skillName: string, newTarget: string, oldTarget?: string, options?: { restrictTargetToSkillsDirs?: boolean }) => Promise<OperationResult> };
+  return linkUpdateData(skillName, newTarget, oldTarget, { restrictTargetToSkillsDirs: true });
 });
 
 ipcMain.handle('skilllink:branchList', async (_event, repoName?: string) => {

@@ -41,7 +41,7 @@ export function FileBrowser({ repo, onCreateSymlink }: FileBrowserProps) {
     setLoading(true);
     setError(null);
     try {
-      const nextFiles = await window.skilllink?.fileList(repo.path, dirPath);
+      const nextFiles = await window.skilllink?.fileList(`${repo.owner}/${repo.name}`, dirPath);
       setFiles(nextFiles ?? []);
       setCurrentPath(dirPath);
     } catch (loadError) {

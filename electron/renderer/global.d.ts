@@ -14,7 +14,7 @@ declare global {
       skillDiscover: () => Promise<OperationResult>;
       linkList: (skillName?: string) => Promise<ListedSymlink[]>;
       linkSync: () => Promise<OperationResult>;
-      fileList: (repoPath: string, dirPath?: string) => Promise<FileBrowserEntry[]>;
+      fileList: (repoName: string, dirPath?: string) => Promise<FileBrowserEntry[]>;
       linkCreate: (skillName: string, targetDir?: string) => Promise<OperationResult>;
       linkRemove: (skillName: string, targetPath?: string) => Promise<OperationResult>;
       linkUpdate: (skillName: string, newTarget: string, oldTarget?: string) => Promise<OperationResult>;

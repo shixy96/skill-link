@@ -21,6 +21,10 @@ interface ResolvedSkill {
   sourcePath: string;
 }
 
+interface LinkOptions {
+  restrictTargetToSkillsDirs?: boolean;
+}
+
 export interface LinkCreateResult {
   skill: Skill;
   target: string;
@@ -66,18 +70,31 @@ function relativeInside(parentPath: string, childPath: string): string | undefin
   return undefined;
 }
 
-async function resolveSkillSourcePath(skill: Skill): Promise<string | undefined> {
-  if (path.isAbsolute(skill.path)) {
-    return skill.path;
+async function realpathIfExists(filePath: string): Promise<string | undefined> {
+  try {
+    return await fs.realpath(filePath);
+  } catch {
+    return undefined;
   }
+}
 
+async function resolveSkillSourcePath(skill: Skill): Promise<string | undefined> {
   const repos = await listManagedRepos();
   const repo = repos.find((entry) => repoName(entry) === skill.repo);
   if (!repo) {
     return undefined;
   }
 
-  return path.join(repo.path, skill.path);
+  const repoRoot = await realpathIfExists(repo.path);
+  const sourcePath = await realpathIfExists(
+    path.isAbsolute(skill.path) ? skill.path : path.join(repo.path, skill.path)
+  );
+
+  if (!repoRoot || !sourcePath || relativeInside(repoRoot, sourcePath) === undefined) {
+    return undefined;
+  }
+
+  return sourcePath;
 }
 
 function formatSkillRefs(skills: Skill[]): string {
@@ -97,13 +114,23 @@ async function resolveMatchedSkill(skill: Skill): Promise<OperationResult<Resolv
   return ok({ skill, sourcePath });
 }
 
-async function findManagedRepoForPath(skillDir: string): Promise<{ repo: RepoMetadata; relativePath: string } | undefined> {
+async function findManagedRepoForPath(skillDir: string): Promise<{ repo: RepoMetadata; relativePath: string; sourcePath: string } | undefined> {
   const repos = await listManagedRepos();
+  const resolvedSkillDir = await realpathIfExists(skillDir);
+
+  if (!resolvedSkillDir) {
+    return undefined;
+  }
 
   for (const repo of repos) {
-    const relativePath = relativeInside(repo.path, skillDir);
+    const repoRoot = await realpathIfExists(repo.path);
+    if (!repoRoot) {
+      continue;
+    }
+
+    const relativePath = relativeInside(repoRoot, resolvedSkillDir);
     if (relativePath !== undefined) {
-      return { repo, relativePath };
+      return { repo, relativePath, sourcePath: resolvedSkillDir };
     }
   }
 
@@ -196,7 +223,30 @@ async function resolveSkill(skillRef: string): Promise<OperationResult<ResolvedS
     hasSKILLMd: true
   });
 
-  return ok({ skill, sourcePath: expandedRef });
+  return ok({ skill, sourcePath: repoMatch.sourcePath });
+}
+
+async function validateTargetPath(targetPath: string, options: LinkOptions): Promise<OperationResult<void>> {
+  if (!options.restrictTargetToSkillsDirs) {
+    return ok(undefined);
+  }
+
+  const resolvedTarget = path.resolve(expandPath(targetPath));
+  const skillsDirs = await listSkillsDirs();
+
+  for (const dir of Object.values(skillsDirs)) {
+    const resolvedDir = path.resolve(dir);
+    if (relativeInside(resolvedDir, resolvedTarget) !== undefined) {
+      return ok(undefined);
+    }
+  }
+
+  return fail({
+    code: 'INVALID_TARGET_PATH',
+    message: `Target must be inside a configured skills directory: ${targetPath}`,
+    path: targetPath,
+    action: 'Choose a configured skills directory target'
+  });
 }
 
 async function resolveTargetPath(skill: Skill, targetDir?: string): Promise<string> {
@@ -242,7 +292,7 @@ export async function listLinksData(skillName?: string): Promise<ListedSymlink[]
   return links;
 }
 
-export async function linkCreateData(skillRef: string, targetDir?: string): Promise<OperationResult<LinkCreateResult>> {
+export async function linkCreateData(skillRef: string, targetDir?: string, options: LinkOptions = {}): Promise<OperationResult<LinkCreateResult>> {
   const resolved = await resolveSkill(skillRef);
   if (!resolved.ok) {
     return resolved;
@@ -250,6 +300,11 @@ export async function linkCreateData(skillRef: string, targetDir?: string): Prom
 
   const { skill, sourcePath } = resolved.data;
   const targetPath = await resolveTargetPath(skill, targetDir);
+  const targetValidation = await validateTargetPath(targetPath, options);
+  if (!targetValidation.ok) {
+    return targetValidation;
+  }
+
   const result = await createSymlink(sourcePath, targetPath);
 
   if (!result.success && result.error) {
@@ -262,28 +317,30 @@ export async function linkCreateData(skillRef: string, targetDir?: string): Prom
     status: 'active'
   };
 
-  await addSymlinkToSkill(skill.id, symlink);
+  try {
+    await addSymlinkToSkill(skill.id, symlink);
+  } catch {
+    await removeSymlink(targetPath);
+    return fail({
+      code: 'REGISTRY_WRITE_FAILED',
+      message: `Failed to update registry after creating symlink: ${targetPath}`,
+      path: targetPath,
+      action: 'Run skilllink link sync'
+    });
+  }
 
   return ok({ skill, target: targetPath }, 'Symlink created successfully');
 }
 
 export async function linkCreate(skillRef: string, targetDir?: string): Promise<void> {
-  const resolved = await resolveSkill(skillRef);
-  if (!resolved.ok) {
-    formatOperationError(resolved);
-    return;
-  }
-
-  const targetPath = await resolveTargetPath(resolved.data.skill, targetDir);
-  console.log(`Creating symlink for ${resolved.data.skill.name}...`);
-  console.log(`  Target: ${targetPath}`);
-
   const result = await linkCreateData(skillRef, targetDir);
   if (!result.ok) {
     formatOperationError(result);
     return;
   }
 
+  console.log(`Creating symlink for ${result.data.skill.name}...`);
+  console.log(`  Target: ${result.data.target}`);
   console.log(`✓ ${result.message}`);
 }
 
@@ -433,7 +490,8 @@ export async function linkSync(): Promise<void> {
 export async function linkUpdateData(
   skillRef: string,
   newTarget: string,
-  oldTarget?: string
+  oldTarget?: string,
+  options: LinkOptions = {}
 ): Promise<OperationResult<LinkUpdateResult>> {
   const resolved = await resolveSkill(skillRef);
   if (!resolved.ok) {
@@ -462,19 +520,34 @@ export async function linkUpdateData(
   }
 
   const resolvedTarget = await resolveTargetPath(skill, newTarget);
+  const targetValidation = await validateTargetPath(resolvedTarget, options);
+  if (!targetValidation.ok) {
+    return targetValidation;
+  }
+
   const result = await updateSymlink(sourcePath, oldSymlink.target, resolvedTarget);
 
   if (!result.success && result.error) {
     return fail(result.error);
   }
 
-  await updateSkill(skill.id, {
-    symlinks: skill.symlinks.map(s =>
-      s.target === oldSymlink.target
-        ? { ...s, target: resolvedTarget, status: 'active' }
-        : s
-    )
-  });
+  try {
+    await updateSkill(skill.id, {
+      symlinks: skill.symlinks.map(s =>
+        s.target === oldSymlink.target
+          ? { ...s, target: resolvedTarget, status: 'active' }
+          : s
+      )
+    });
+  } catch {
+    await updateSymlink(sourcePath, resolvedTarget, oldSymlink.target);
+    return fail({
+      code: 'REGISTRY_WRITE_FAILED',
+      message: `Failed to update registry after moving symlink: ${resolvedTarget}`,
+      path: resolvedTarget,
+      action: 'Run skilllink link sync'
+    });
+  }
 
   return ok({
     skill,

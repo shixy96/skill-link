@@ -31,6 +31,15 @@ function contractPath(p: string): string {
   return p;
 }
 
+function assertSafeConfigKey(key: string): void {
+  const unsafeSegments = new Set(['__proto__', 'constructor', 'prototype']);
+  const keys = key.split('.');
+
+  if (keys.some((segment) => !segment || unsafeSegments.has(segment))) {
+    throw new Error(`Invalid config key: ${key}`);
+  }
+}
+
 export async function ensureConfigDir(): Promise<void> {
   await fs.mkdir(CONFIG_DIR, { recursive: true });
 }
@@ -53,6 +62,7 @@ export async function getConfig(): Promise<Config> {
 }
 
 export async function setConfig(key: string, value: unknown): Promise<void> {
+  assertSafeConfigKey(key);
   await ensureConfigDir();
   const config = await getConfig();
 
@@ -61,7 +71,7 @@ export async function setConfig(key: string, value: unknown): Promise<void> {
 
   for (let i = 0; i < keys.length - 1; i++) {
     const k = keys[i];
-    if (!(k in current)) {
+    if (!Object.prototype.hasOwnProperty.call(current, k)) {
       current[k] = {};
     }
     current = current[k] as Record<string, unknown>;

@@ -29,6 +29,14 @@ function resultMessage(result: OperationResult, fallback: string): Notice {
   };
 }
 
+function getSkillLink() {
+  if (!window.skilllink) {
+    throw new Error('SkillLink bridge is unavailable. Restart the desktop app.');
+  }
+
+  return window.skilllink;
+}
+
 export function App() {
   const [currentView, setCurrentView] = useState<View>('skills');
   const [selectedRepo, setSelectedRepo] = useState<RepoMetadata | null>(null);
@@ -70,7 +78,7 @@ export function App() {
 
     await runOperation(
       'Adding repository',
-      () => window.skilllink!.repoAdd(repoUrl),
+      () => getSkillLink().repoAdd(repoUrl),
       'Repository added.'
     );
     setCurrentView('repos');
@@ -79,7 +87,7 @@ export function App() {
   async function handleDiscoverSkills() {
     await runOperation(
       'Discovering skills',
-      () => window.skilllink!.skillDiscover(),
+      () => getSkillLink().skillDiscover(),
       'Skill registry updated.'
     );
   }
@@ -87,7 +95,7 @@ export function App() {
   async function handleSyncRepos() {
     await runOperation(
       'Syncing repositories',
-      () => window.skilllink!.repoSync(),
+      () => getSkillLink().repoSync(),
       'Repositories synced.'
     );
   }
@@ -95,7 +103,7 @@ export function App() {
   async function handleSyncLinks() {
     await runOperation(
       'Syncing symlinks',
-      () => window.skilllink!.linkSync(),
+      () => getSkillLink().linkSync(),
       'Symlink registry updated.'
     );
   }
@@ -104,7 +112,7 @@ export function App() {
     const target = window.prompt('Target alias or path. Leave empty for the default target.');
     await runOperation(
       'Creating link',
-      () => window.skilllink!.linkCreate(skillRef, target || undefined),
+      () => getSkillLink().linkCreate(skillRef, target || undefined),
       'Symlink created.'
     );
     if (skill) {
@@ -121,7 +129,7 @@ export function App() {
 
     await runOperation(
       'Removing link',
-      () => window.skilllink!.linkRemove(skill.id, targetPath),
+      () => getSkillLink().linkRemove(skill.id, targetPath),
       'Symlink removed.'
     );
   }
@@ -134,7 +142,7 @@ export function App() {
 
     await runOperation(
       'Updating link',
-      () => window.skilllink!.linkUpdate(skill.id, target, oldTarget),
+      () => getSkillLink().linkUpdate(skill.id, target, oldTarget),
       'Symlink updated.'
     );
   }
@@ -142,7 +150,7 @@ export function App() {
   async function handleBranchSwitch(repo: RepoMetadata, branchName: string) {
     await runOperation(
       'Switching branch',
-      () => window.skilllink!.branchSwitch(branchName, `${repo.owner}/${repo.name}`),
+      () => getSkillLink().branchSwitch(branchName, `${repo.owner}/${repo.name}`),
       'Branch switched.'
     );
   }
@@ -155,7 +163,7 @@ export function App() {
 
     await runOperation(
       'Creating branch',
-      () => window.skilllink!.branchCreate(branchName, `${repo.owner}/${repo.name}`),
+      () => getSkillLink().branchCreate(branchName, `${repo.owner}/${repo.name}`),
       'Branch created.'
     );
   }
@@ -168,12 +176,24 @@ export function App() {
 
     await runOperation(
       'Removing repository',
-      () => window.skilllink!.repoRemove(`${repo.owner}/${repo.name}`, false),
+      () => getSkillLink().repoRemove(`${repo.owner}/${repo.name}`, false),
       'Repository removed.'
     );
     if (selectedRepo?.path === repo.path) {
       setSelectedRepo(null);
     }
+  }
+
+  if (!window.skilllink) {
+    return (
+      <div className="app-shell">
+        <main className="main-pane">
+          <div className="empty-state">
+            SkillLink bridge is unavailable. Restart the desktop app.
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (

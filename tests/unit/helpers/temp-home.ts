@@ -17,6 +17,7 @@ export async function withTempHome<T>(fn: (homeDir: string) => Promise<T>): Prom
   } finally {
     vi.doUnmock('os');
     vi.resetModules();
+    await fs.rm(homeDir, { recursive: true, force: true });
   }
 
   return result;

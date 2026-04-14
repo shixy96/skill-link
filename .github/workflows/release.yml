@@ -30,7 +30,9 @@ jobs:
         run: npm ci
 
       - name: Validate release version
-        run: node scripts/validate-release.mjs "${{ inputs.version }}"
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/validate-release.mjs "$VERSION"
 
       - name: Build release
         run: npm run release:build

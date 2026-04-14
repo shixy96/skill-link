@@ -1,10 +1,9 @@
-import { exec, execFile } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import type { Capability } from '../types.js';
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 export interface GhResult {
@@ -49,12 +48,8 @@ async function execGit(args: string[], cwd?: string): Promise<GhResult> {
 }
 
 export async function checkGhCli(): Promise<boolean> {
-  try {
-    await execAsync('which gh', { encoding: 'utf-8' });
-    return true;
-  } catch {
-    return false;
-  }
+  const result = await execGh(['--version']);
+  return result.success;
 }
 
 export async function checkGhAuth(): Promise<boolean> {
@@ -98,15 +93,12 @@ export async function pushRepo(repoPath: string): Promise<GhResult> {
 }
 
 export async function listBranches(repoPath: string): Promise<string[]> {
-  try {
-    const { stdout } = await execAsync('git branch -a', {
-      cwd: repoPath,
-      encoding: 'utf-8'
-    });
-    return stdout.split('\n').map(b => b.trim()).filter(b => b);
-  } catch {
+  const result = await execGit(['branch', '-a'], repoPath);
+  if (!result.success || !result.stdout) {
     return [];
   }
+
+  return result.stdout.split('\n').map(b => b.trim()).filter(b => b);
 }
 
 export async function switchBranch(repoPath: string, branchName: string): Promise<GhResult> {
@@ -118,15 +110,12 @@ export async function createBranch(repoPath: string, branchName: string): Promis
 }
 
 export async function getCurrentBranch(repoPath: string): Promise<string> {
-  try {
-    const { stdout } = await execAsync('git branch --show-current', {
-      cwd: repoPath,
-      encoding: 'utf-8'
-    });
-    return stdout.trim();
-  } catch {
+  const result = await execGit(['branch', '--show-current'], repoPath);
+  if (!result.success || !result.stdout) {
     return '';
   }
+
+  return result.stdout.trim();
 }
 
 export function isOfflineError(error: unknown): boolean {

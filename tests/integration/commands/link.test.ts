@@ -138,4 +138,67 @@ describe('link command integration', () => {
       expect((await fs.lstat(path.join(targetDir, 'common'))).isSymbolicLink()).toBe(true);
     });
   });
+
+  it('restricts Electron-driven symlink targets to configured skills directories', async () => {
+    await withTempHome(async (homeDir) => {
+      const repoDir = await fs.mkdtemp(path.join(tmpdir(), 'skilllink-repo-'));
+      const outsideTargetDir = await fs.mkdtemp(path.join(tmpdir(), 'skilllink-outside-target-'));
+      const skillDir = path.join(repoDir, 'skills', 'safe-skill');
+      await fs.mkdir(skillDir, { recursive: true });
+      await fs.writeFile(
+        path.join(skillDir, 'SKILL.md'),
+        [
+          '---',
+          'name: safe-skill',
+          'description: Test skill',
+          '---',
+          '',
+          'Body'
+        ].join('\n'),
+        'utf-8'
+      );
+
+      const skilllinkDir = path.join(homeDir, '.skilllink');
+      await fs.mkdir(skilllinkDir, { recursive: true });
+      await fs.writeFile(
+        path.join(skilllinkDir, 'repos.json'),
+        JSON.stringify([
+          {
+            name: 'skills',
+            owner: 'acme',
+            path: repoDir,
+            branches: ['main'],
+            currentBranch: 'main'
+          }
+        ]),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(skilllinkDir, 'skill-registry.json'),
+        JSON.stringify({
+          skills: [
+            {
+              id: 'safe-skill',
+              name: 'safe-skill',
+              repo: 'acme/skills',
+              path: 'skills/safe-skill',
+              hasSKILLMd: true,
+              symlinks: []
+            }
+          ]
+        }),
+        'utf-8'
+      );
+
+      const { linkCreateData } = await import('../../../src/commands/link.js');
+
+      const blocked = await linkCreateData('safe-skill', outsideTargetDir, { restrictTargetToSkillsDirs: true });
+      expect(blocked.ok).toBe(false);
+      expect(blocked.ok ? undefined : blocked.error.code).toBe('INVALID_TARGET_PATH');
+
+      const allowed = await linkCreateData('safe-skill', 'claude', { restrictTargetToSkillsDirs: true });
+      expect(allowed.ok).toBe(true);
+      expect((await fs.lstat(path.join(homeDir, '.claude', 'skills', 'safe-skill'))).isSymbolicLink()).toBe(true);
+    });
+  });
 });

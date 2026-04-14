@@ -5,6 +5,7 @@ release/
 src/**/*.js
 src/**/*.js.map
 .DS_Store
+.claude/
 .env
 .env.*
 npm-debug.log*

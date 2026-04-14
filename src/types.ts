@@ -10,11 +10,15 @@ export type SkillLinkError =
   | { code: 'SYMLINK_BROKEN'; path: string; message?: string; action: 'Run skilllink link sync to update registry' }
   | { code: 'SYMLINK_NOT_SYMLINK'; path: string; message?: string; action: 'Remove or backup existing file: rm <path>' }
   | { code: 'INVALID_SKILL_PATH'; path: string; message?: string; action: 'Verify skill path' }
+  | { code: 'INVALID_TARGET_PATH'; path: string; message?: string; action: 'Choose a configured skills directory target' }
   | { code: 'SKILLS_DIR_NOT_FOUND'; path: string; message?: string; action: 'Create directory or update config' }
   | { code: 'SKILL_NOT_FOUND'; name: string; message?: string; action: 'Check skill list: skilllink skill list' }
+  | { code: 'SKILL_AMBIGUOUS'; name: string; message?: string; action: 'Check skill list: skilllink skill list' }
   | { code: 'REPO_NOT_FOUND'; name: string; message?: string; action: 'Add repo: skilllink repo add <url>' }
+  | { code: 'REPO_AMBIGUOUS'; name: string; message?: string; action: 'Run skilllink repo list' }
   | { code: 'BRANCH_NOT_FOUND'; name: string; message?: string; action: 'List branches: skilllink branch list' }
   | { code: 'PARSE_SKILL_MD_FAILED'; path: string; message?: string; action: 'Verify SKILL.md format' }
+  | { code: 'REGISTRY_WRITE_FAILED'; path: string; message?: string; action: 'Run skilllink link sync' }
   | { code: 'CONFIG_INVALID'; key: string; message?: string; action: 'Check config syntax' };
 
 export function getErrorMessage(err: SkillLinkError): string {

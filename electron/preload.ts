@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('skilllink', {
   skillDiscover: () => ipcRenderer.invoke('skilllink:skillDiscover'),
   linkList: (skillName?: string) => ipcRenderer.invoke('skilllink:linkList', skillName),
   linkSync: () => ipcRenderer.invoke('skilllink:linkSync'),
-  fileList: (repoPath: string, dirPath?: string) => ipcRenderer.invoke('skilllink:fileList', repoPath, dirPath),
+  fileList: (repoName: string, dirPath?: string) => ipcRenderer.invoke('skilllink:fileList', repoName, dirPath),
   linkCreate: (skillName: string, targetDir?: string) => ipcRenderer.invoke('skilllink:linkCreate', skillName, targetDir),
   linkRemove: (skillName: string, targetPath?: string) => ipcRenderer.invoke('skilllink:linkRemove', skillName, targetPath),
   linkUpdate: (skillName: string, newTarget: string, oldTarget?: string) => ipcRenderer.invoke('skilllink:linkUpdate', skillName, newTarget, oldTarget),
