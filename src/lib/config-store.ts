@@ -111,7 +111,12 @@ export async function listSkillsDirs(): Promise<Record<string, string>> {
   return result;
 }
 
-export function resolveSkillsDir(type: 'claude' | 'openclaw' | 'agent' | string): string {
+export async function resolveSkillsDir(type: 'claude' | 'openclaw' | 'agent' | string): Promise<string> {
+  const dirs = await listSkillsDirs();
+  if (Object.hasOwn(dirs, type)) {
+    return dirs[type];
+  }
+
   return expandPath(type.startsWith('~') ? type : `~/${type}`);
 }
 

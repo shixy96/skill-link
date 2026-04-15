@@ -7,12 +7,17 @@ interface FileBrowserProps {
 }
 
 function dirname(filePath: string): string {
-  const parts = filePath.split('/').filter(Boolean);
-  if (parts.length <= 1) {
-    return '/';
+  // Use the last `/` on all platforms; on Windows the main process
+  // normalises to forward slashes before sending paths to the renderer.
+  const lastSlash = filePath.lastIndexOf('/');
+  const lastBack = filePath.lastIndexOf('\\');
+  const lastSep = Math.max(lastSlash, lastBack);
+
+  if (lastSep <= 0) {
+    return filePath.slice(0, lastSep + 1) || '/';
   }
 
-  return `/${parts.slice(0, -1).join('/')}`;
+  return filePath.slice(0, lastSep);
 }
 
 export function FileBrowser({ repo, onCreateSymlink }: FileBrowserProps) {
