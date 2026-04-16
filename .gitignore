@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-electron/
+release/
+src/**/*.js
+src/**/*.js.map
+.DS_Store
+.claude/
+.env
+.env.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
