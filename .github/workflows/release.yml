@@ -38,7 +38,7 @@ jobs:
         run: npm run release:build
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skilllink-v${{ inputs.version }}-macos
           path: |
