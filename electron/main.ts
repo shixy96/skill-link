@@ -116,8 +116,15 @@ ipcMain.handle('skilllink:fileList', async (_event, repoName: string, dirPath?: 
     throw new Error(`Repository not found: ${repoName}`);
   }
 
-  const rootPath = await fs.realpath(repo.path);
-  const requestedPath = await fs.realpath(dirPath || repo.path);
+  let rootPath: string;
+  let requestedPath: string;
+  try {
+    rootPath = await fs.realpath(repo.path);
+    requestedPath = await fs.realpath(dirPath || repo.path);
+  } catch {
+    throw new Error('Directory not found or inaccessible.');
+  }
+
   const relative = path.relative(rootPath, requestedPath);
 
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
@@ -195,7 +202,15 @@ ipcMain.handle('skilllink:configGet', async () => {
   return configModule.configData();
 });
 
+const ALLOWED_CONFIG_KEYS = new Set([
+  'reposDir',
+  'defaultSkillsDir'
+]);
+
 ipcMain.handle('skilllink:configSet', async (_event, key: string, value: string) => {
+  if (!ALLOWED_CONFIG_KEYS.has(key)) {
+    throw new Error(`Config key not allowed via UI: ${key}`);
+  }
   const configModule = (await import(commandModuleUrl('config'))) as unknown as { configSet: (key: string, value: string) => Promise<void> };
   return configModule.configSet(key, value);
 });

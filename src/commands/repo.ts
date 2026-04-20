@@ -14,16 +14,26 @@ import path from 'path';
 import type { OperationResult, RepoMetadata } from '../types.js';
 import { fail, ok } from '../types.js';
 
+function isSafePathComponent(value: string): boolean {
+  return !value.includes('..') && !value.includes('/') && value.length > 0;
+}
+
 export function parseRepoRef(input: string): { owner: string; repoName: string; cloneRef: string; cloneUrl: string } | undefined {
   const urlMatch = input.match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
   if (urlMatch) {
     const [, owner, repoName] = urlMatch;
+    if (!isSafePathComponent(owner) || !isSafePathComponent(repoName)) {
+      return undefined;
+    }
     return { owner, repoName, cloneRef: `${owner}/${repoName}`, cloneUrl: `https://github.com/${owner}/${repoName}.git` };
   }
 
   const repoMatch = input.match(/^([^/]+)\/([^/]+)$/);
   if (repoMatch) {
     const [, owner, repoName] = repoMatch;
+    if (!isSafePathComponent(owner) || !isSafePathComponent(repoName)) {
+      return undefined;
+    }
     return { owner, repoName, cloneRef: `${owner}/${repoName}`, cloneUrl: `https://github.com/${owner}/${repoName}.git` };
   }
 
@@ -159,7 +169,18 @@ export async function repoRemoveData(name: string, deleteFiles = false): Promise
   await removeSkillsForRepo(`${repo.owner}/${repo.name}`);
 
   if (deleteFiles) {
-    await fs.rm(repo.path, { recursive: true, force: true });
+    const config = await getConfig();
+    const reposDir = path.resolve(expandPath(config.reposDir));
+    const repoAbs = path.resolve(repo.path);
+    const rel = path.relative(reposDir, repoAbs);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return fail({
+        code: 'REPO_NOT_FOUND',
+        message: 'Repo path is outside configured reposDir',
+        action: 'Check repos.json'
+      });
+    }
+    await fs.rm(repoAbs, { recursive: true, force: true });
   } else {
     await fs.rm(path.join(repo.path, '.skilllink.json'), { force: true });
   }

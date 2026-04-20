@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
@@ -8,7 +8,7 @@ import { checkGhCli, checkGhAuth, getCapabilities } from '../lib/gh-git.js';
 import { getConfig, CONFIG_DIR, expandPath, listSkillsDirs } from '../lib/config-store.js';
 import { getRegistry } from '../lib/skill-registry.js';
 
-const execAsync = promisify(exec);
+const execAsync = promisify(execFile);
 
 interface DoctorCheck {
   name: string;
@@ -23,7 +23,7 @@ export async function doctor(): Promise<void> {
   const ghAvailable = await checkGhCli();
   if (ghAvailable) {
     try {
-      const { stdout } = await execAsync('gh --version', { encoding: 'utf-8' });
+      const { stdout } = await execAsync('gh', ['--version'], { encoding: 'utf-8' });
       const version = stdout.trim().split('\n')[0];
       checks.push({ name: 'gh CLI', status: 'pass', message: version });
     } catch {
@@ -53,7 +53,7 @@ export async function doctor(): Promise<void> {
 
   // Check Git
   try {
-    const { stdout } = await execAsync('git --version', { encoding: 'utf-8' });
+    const { stdout } = await execAsync('git', ['--version'], { encoding: 'utf-8' });
     checks.push({ name: 'Git', status: 'pass', message: stdout.trim() });
   } catch {
     checks.push({ name: 'Git', status: 'fail', message: 'Not installed' });

@@ -148,7 +148,18 @@ export async function updateSymlink(skillPath: string, oldTarget: string, newTar
     return createResult;
   }
 
-  await createSymlink(skillPath, oldTarget);
+  const rollbackResult = await createSymlink(skillPath, oldTarget);
+  if (!rollbackResult.success) {
+    return {
+      success: false,
+      error: {
+        code: 'SYMLINK_BROKEN',
+        path: resolvedOldTarget,
+        action: 'Rollback failed. Run skilllink link sync to reconcile.'
+      } as unknown as import('../types.js').SkillLinkError
+    };
+  }
+
   return createResult;
 }
 

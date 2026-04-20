@@ -101,17 +101,17 @@ export async function branchSwitchData(branchName: string, repoName?: string): P
     });
   }
 
-  const result = await switchBranch(repoPath, branchName);
+  const result = await switchBranch(repoPath, normalizedBranch);
 
   if (result.success) {
     const meta = await getRepoMetadata(repoPath);
     if (meta) {
-      meta.currentBranch = branchName;
+      meta.currentBranch = normalizedBranch;
       await saveRepoMetadata(repoPath, meta);
-      return ok(meta, `Switched to branch: ${branchName}`);
+      return ok(meta, `Switched to branch: ${normalizedBranch}`);
     }
 
-    return ok({ ...repoResult.data, currentBranch: branchName }, `Switched to branch: ${branchName}`);
+    return ok({ ...repoResult.data, currentBranch: normalizedBranch }, `Switched to branch: ${normalizedBranch}`);
   }
 
   return fail({
